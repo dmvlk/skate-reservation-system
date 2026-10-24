@@ -83,3 +83,15 @@ export interface ActionResult {
   status: string
   message: string
 }
+export interface ExtensionOptions {
+  booking_id: number
+  current_hours: number[]
+  available_extension_hours: number[]
+}
+
+export interface ExtendResponse {
+  id: number
+  status: string
+  hours: number[]
+  message: string
+}

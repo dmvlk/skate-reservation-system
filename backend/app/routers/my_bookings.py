@@ -4,10 +4,17 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.my_bookings import (
     CancelResponse,
+    ExtendRequest,
+    ExtensionOptions,
     MyBookingItem,
     MyBookingRead,
 )
-from app.services.booking import cancel_booking, get_bookings_by_phone
+from app.services.booking import (
+    cancel_booking,
+    extend_booking,
+    get_bookings_by_phone,
+    get_extension_options,
+)
 
 
 router = APIRouter(prefix="/my-bookings", tags=["my-bookings"])
@@ -88,3 +95,38 @@ def cancel(
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Ошибка отмены: {e}")
+
+@router.get("/{booking_id}/extension-options", response_model=ExtensionOptions)
+def extension_options(
+    booking_id: int,
+    phone: str = Query(..., description="Номер телефона"),
+    db: Session = Depends(get_db),
+):
+    return get_extension_options(db, booking_id, phone)
+
+
+@router.post("/{booking_id}/extend")
+def extend(
+    booking_id: int,
+    payload: ExtendRequest,
+    phone: str = Query(..., description="Номер телефона"),
+    db: Session = Depends(get_db),
+):
+    try:
+        booking = extend_booking(db, booking_id, phone, payload.hours_to_add)
+        db.commit()
+        db.refresh(booking)
+
+        hours = sorted([s.hour for s in booking.slots])
+        return {
+            "id": booking.id,
+            "status": booking.status.code,
+            "hours": hours,
+            "message": f"Бронь продлена до {max(hours) + 1}:00",
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Ошибка продления: {e}")

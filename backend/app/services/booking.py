@@ -249,3 +249,154 @@ def cancel_booking(db: Session, booking_id: int, phone: str) -> Booking:
     booking.status_id = cancelled_status.id
     db.flush()
     return booking
+
+
+def get_extension_options(db: Session, booking_id: int, phone: str) -> dict:
+
+    normalized = _normalize_phone(phone)
+    booking = db.execute(
+        select(Booking).where(Booking.id == booking_id)
+    ).scalar_one_or_none()
+
+    if not booking:
+        raise HTTPException(404, "Бронь не найдена")
+    if booking.client.phone != normalized:
+        raise HTTPException(404, "Бронь не найдена")
+
+    active_status = db.execute(
+        select(BookingStatus).where(BookingStatus.code == "active")
+    ).scalar_one()
+    if booking.status_id != active_status.id:
+        raise HTTPException(400, "Продлить можно только активную бронь")
+
+    current_hours = sorted([s.hour for s in booking.slots])
+    if not current_hours:
+        return {
+            "booking_id": booking.id,
+            "current_hours": [],
+            "available_extension_hours": [],
+        }
+
+    last_hour = max(current_hours)
+    booking_date = booking.slots[0].booking_date
+
+    item_ids = [bi.inventory_item_id for bi in booking.items]
+
+    busy_statuses = db.execute(
+        select(BookingStatus).where(
+            BookingStatus.code.in_(["active", "issued"])
+        )
+    ).scalars().all()
+    busy_status_ids = [s.id for s in busy_statuses]
+
+    other_busy_rows = db.execute(
+        select(BookingSlot.hour)
+        .join(Booking, Booking.id == BookingSlot.booking_id)
+        .join(BookingItem, BookingItem.booking_id == Booking.id)
+        .where(
+            BookingSlot.booking_date == booking_date,
+            Booking.id != booking.id,
+            Booking.status_id.in_(busy_status_ids),
+            BookingItem.inventory_item_id.in_(item_ids),
+        )
+    ).all()
+    busy_hours_other = {row[0] for row in other_busy_rows}
+
+    available: list[int] = []
+    h = last_hour + 1
+    while h < 20:
+        if h in busy_hours_other:
+            break
+        available.append(h)
+        h += 1
+
+    return {
+        "booking_id": booking.id,
+        "current_hours": current_hours,
+        "available_extension_hours": available,
+    }
+
+
+def extend_booking(
+    db: Session, booking_id: int, phone: str, hours_to_add: list[int]
+) -> Booking:
+
+    if not hours_to_add:
+        raise HTTPException(400, "Нужно указать хотя бы один час")
+
+    if any(h not in WORK_HOURS for h in hours_to_add):
+        raise HTTPException(400, "Часы должны быть в доступном диапазоне")
+
+    if len(set(hours_to_add)) != len(hours_to_add):
+        raise HTTPException(400, "Часы не могут повторяться")
+
+    normalized = _normalize_phone(phone)
+    booking = db.execute(
+        select(Booking).where(Booking.id == booking_id)
+    ).scalar_one_or_none()
+
+    if not booking:
+        raise HTTPException(404, "Бронь не найдена")
+    if booking.client.phone != normalized:
+        raise HTTPException(404, "Бронь не найдена")
+
+    active_status = db.execute(
+        select(BookingStatus).where(BookingStatus.code == "active")
+    ).scalar_one()
+    if booking.status_id != active_status.id:
+        raise HTTPException(400, "Продлить можно только активную бронь")
+
+    current_hours = sorted([s.hour for s in booking.slots])
+    if not current_hours:
+        raise HTTPException(400, "У брони нет часов")
+
+    last_hour = max(current_hours)
+    booking_date = booking.slots[0].booking_date
+
+    expected = list(range(last_hour + 1, last_hour + 1 + len(hours_to_add)))
+    if sorted(hours_to_add) != expected:
+        raise HTTPException(
+            400,
+            f"Продление возможно только на следующий час после {last_hour}:00. "
+        )
+
+    item_ids = [bi.inventory_item_id for bi in booking.items]
+
+    busy_statuses = db.execute(
+        select(BookingStatus).where(
+            BookingStatus.code.in_(["active", "issued"])
+        )
+    ).scalars().all()
+    busy_status_ids = [s.id for s in busy_statuses]
+
+    conflict = db.execute(
+        select(BookingSlot.hour)
+        .join(Booking, Booking.id == BookingSlot.booking_id)
+        .join(BookingItem, BookingItem.booking_id == Booking.id)
+        .where(
+            BookingSlot.booking_date == booking_date,
+            Booking.id != booking.id,
+            Booking.status_id.in_(busy_status_ids),
+            BookingItem.inventory_item_id.in_(item_ids),
+            BookingSlot.hour.in_(hours_to_add),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+
+    if conflict is not None:
+        raise HTTPException(
+            409,
+            f"Час {conflict}:00 уже занят другой бронью. Продление невозможно."
+        )
+
+    for h in sorted(hours_to_add):
+        db.add(
+            BookingSlot(
+                booking_id=booking.id,
+                booking_date=booking_date,
+                hour=h,
+            )
+        )
+
+    db.flush()
+    return booking
