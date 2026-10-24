@@ -1,0 +1,47 @@
+import { test, expect } from '@playwright/test'
+
+test('standalone demo: booking persists, employee issues and receives equipment', async ({
+  page,
+}) => {
+  const apiRequests: string[] = []
+  const pageErrors: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('/api/')) apiRequests.push(request.url())
+  })
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  await page.goto('/')
+  await expect(page.getByText(/Демонстрационный режим/)).toBeVisible()
+  await page.getByRole('link', { name: 'Забронировать: Коньки' }).click()
+  await page.getByRole('button', { name: '42', exact: true }).click()
+  await page.getByRole('button', { name: 'Выбрать время' }).click()
+  await page.locator('.date-choice').nth(1).click()
+  await page.getByRole('button', { name: '16:00–17:00', exact: true }).click()
+  await page.getByRole('button', { name: 'Продолжить' }).click()
+  await page.getByLabel('Фамилия', { exact: true }).fill('Петров')
+  await page.getByLabel('Имя', { exact: true }).fill('Иван')
+  await page.getByLabel('Номер телефона', { exact: true }).fill('89990001122')
+  await page.getByRole('button', { name: 'Подтвердить бронь' }).click()
+  await expect(page.getByRole('heading', { name: 'Всё готово к вашему дню' })).toBeVisible()
+  await page.locator('.success-page').getByRole('link', { name: 'Мои брони' }).click()
+  await expect(page.getByText('БРОНЬ № 1043', { exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('БРОНЬ № 1043', { exact: true })).toBeVisible()
+  await page.goto('/admin')
+  await page.getByLabel('Логин', { exact: true }).fill('demo')
+  await page.getByLabel('Пароль', { exact: true }).fill('demo')
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await page.getByRole('button', { name: 'По номеру брони' }).click()
+  await page.getByLabel('Номер брони', { exact: true }).fill('1043')
+  await page.getByRole('button', { name: 'Найти', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Петров Иван' })).toBeVisible()
+  await page.getByRole('button', { name: 'Выдать снаряжение' }).click()
+  await page.getByRole('button', { name: 'Подтвердить', exact: true }).click()
+  await page.getByRole('button', { name: 'Принять возврат' }).click()
+  await page.getByRole('button', { name: 'Подтвердить', exact: true }).click()
+  await expect(page.getByText('Завершено', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Инвентарь', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Добавить снаряжение' })).toBeEnabled()
+  await expect(page.locator('tbody tr')).not.toHaveCount(0)
+  expect(apiRequests).toEqual([])
+  expect(pageErrors).toEqual([])
+})
