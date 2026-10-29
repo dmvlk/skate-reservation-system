@@ -2,6 +2,11 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 
+class SelectedItem(BaseModel):
+    item_type_code: str = Field(..., description="helmet, jacket, pants и т.д.")
+    size_value: int | None = None
+    size_bucket: str | None = None
+
 class BookingCreate(BaseModel):
     category: str = Field(..., description="skates | skis | snowboard")
 
@@ -21,6 +26,7 @@ class BookingCreate(BaseModel):
     size_bucket: str | None = None
     boot_size_value: int | None = None
 
+    selected_items: list[SelectedItem] = Field(default_factory=list)
 
 class BookingRead(BaseModel):
     id: int

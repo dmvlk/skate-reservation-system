@@ -24,7 +24,7 @@ import {
 } from '../lib/format'
 import { EquipmentArt } from '../components/EquipmentArt'
 import { ErrorNotice, Loading } from '../components/ui'
-import type { BookingCreate, CategoryCode } from '../types'
+import type { BookingCreate, CategoryCode, SelectedItem } from '../types'
 
 export function Booking() {
   const { category = '' } = useParams()
@@ -41,8 +41,7 @@ function BookingFlow({ category }: { category: CategoryCode }) {
   const cache = useQueryClient()
   const info = categories[category]
   const [step, setStep] = useState(0)
-  const [size, setSize] = useState('')
-  const [bucket, setBucket] = useState('')
+  const [selections, setSelections] = useState<Record<string, string>>({})
   const [now, setNow] = useState(rentalNow)
   const [date, setDate] = useState(() => addDays(rentalNow().date, rentalNow().hour >= 19 ? 1 : 0))
   const [hours, setHours] = useState<number[]>([])
@@ -62,23 +61,32 @@ function BookingFlow({ category }: { category: CategoryCode }) {
     queryKey: ['item-types', category],
     queryFn: ({ signal }) => api.itemTypes(category, signal),
   })
-  const bucketOptions =
-    types.data?.find((t) => t.code === (category === 'skis' ? 'ski' : 'snowboard'))?.size_options ||
-    []
-  const sizeReady =
-    /^\d+$/.test(size) &&
-    Number(size) >= 20 &&
-    Number(size) <= 55 &&
-    (category === 'skates' || bucketOptions.some((option) => option.code === bucket))
-  const sizes =
-    category === 'skates'
-      ? { size_value: Number(size) }
-      : { size_bucket: bucket, boot_size_value: Number(size) }
+
+  const isReady = types.data?.every((t) => !t.is_required || !!selections[t.code]) ?? false
+
+  const availabilityParams = (() => {
+    const params: Record<string, string | number | undefined> = { category }
+    
+    if (category === 'skates') {
+      params.size_value = selections['skate'] ? Number(selections['skate']) : undefined
+    } else {
+      const boardCode = category === 'skis' ? 'ski' : 'snowboard'
+      const bootCode = category === 'skis' ? 'ski_boot' : 'snowboard_boot'
+      params.size_bucket = selections[boardCode]
+      params.boot_size_value = selections[bootCode] ? Number(selections[bootCode]) : undefined
+    }
+    return params
+  })()
+
+  // Доступные часы (учитываем только базовые размеры, т.к. бэк проверяет комплект при создании)
+  const isBaseReady = category === 'skates' 
+    ? !!selections['skate'] 
+    : !!selections['ski'] || !!selections['snowboard']
+
   const availability = useQuery({
-    queryKey: ['availability', category, size, bucket, now.date],
-    queryFn: ({ signal }) =>
-      api.availability({ category, ...sizes, start_date: now.date, days: 7 }, signal),
-    enabled: step > 0 && sizeReady,
+    queryKey: ['availability', category, JSON.stringify(availabilityParams), now.date],
+    queryFn: ({ signal }) => api.availability({ ...availabilityParams, start_date: now.date, days: 7 }, signal),
+    enabled: step > 0 && isBaseReady,
     staleTime: 0,
     refetchInterval: 30000,
   })
@@ -113,6 +121,11 @@ function BookingFlow({ category }: { category: CategoryCode }) {
     setFormError('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+  const setSelection = (code: string, size: string) => {
+    setSelections(prev => ({ ...prev, [code]: size }))
+    resetSelection()
+  }
+
   function submit(event: React.FormEvent) {
     event.preventDefault()
     if (booking.isPending) return
@@ -126,9 +139,28 @@ function BookingFlow({ category }: { category: CategoryCode }) {
       return
     }
     setFormError('')
-    booking.mutate({
+
+    // Собираем selected_items
+    const selected_items: SelectedItem[] = []
+    const baseTypes = ['skate', 'ski', 'snowboard', 'ski_boot', 'snowboard_boot']
+    
+    if (types.data) {
+      types.data.forEach(t => {
+        const size = selections[t.code]
+        if (!size) return
+        if (baseTypes.includes(t.code)) return // базовые уходят в size_value/bucket
+
+        const isNumeric = ['skate', 'ski_boot', 'snowboard_boot'].includes(t.code)
+        selected_items.push({
+          item_type_code: t.code,
+          size_value: isNumeric ? Number(size) : undefined,
+          size_bucket: !isNumeric ? size : undefined,
+        })
+      })
+    }
+
+    const payload: BookingCreate = {
       category,
-      ...sizes,
       ...client,
       last_name: client.last_name.trim(),
       first_name: client.first_name.trim(),
@@ -136,9 +168,20 @@ function BookingFlow({ category }: { category: CategoryCode }) {
       phone: normalizePhone(client.phone),
       booking_date: date,
       hours: [...hours].sort((a, b) => a - b),
-    })
+      selected_items,
+    }
+
+    if (category === 'skates') {
+      payload.size_value = Number(selections['skate'])
+    } else {
+      payload.size_bucket = selections[category === 'skis' ? 'ski' : 'snowboard']
+      payload.boot_size_value = Number(selections[category === 'skis' ? 'ski_boot' : 'snowboard_boot'])
+    }
+
+    booking.mutate(payload)
   }
-  if (booking.isSuccess)
+
+  if (booking.isSuccess) {
     return (
       <div className="container page success-page">
         <div className="success-icon">
@@ -157,9 +200,6 @@ function BookingFlow({ category }: { category: CategoryCode }) {
             </span>
           </div>
           <h2>{info.name}</h2>
-          <p>
-            {category === 'skates' ? `Размер ${size} EU` : `Размер ${bucket} · ботинки ${size} EU`}
-          </p>
           <div className="ticket-details">
             <span>
               <CalendarDays size={18} />
@@ -173,40 +213,27 @@ function BookingFlow({ category }: { category: CategoryCode }) {
           <div className="ticket-foot">Телефон заканчивается на {booking.data.phone_last4}</div>
         </div>
         <div className="button-row">
-          <Link
-            to="/my-bookings"
-            state={{ phone: normalizePhone(client.phone) }}
-            className="button primary"
-          >
+          <Link to="/my-bookings" state={{ phone: normalizePhone(client.phone) }} className="button primary">
             Мои брони <ArrowRight size={17} />
           </Link>
-          <Link to="/" className="button secondary">
-            На главную
-          </Link>
+          <Link to="/" className="button secondary">На главную</Link>
         </div>
       </div>
     )
+  }
   return (
     <div className="container page booking-page">
-      <Link to="/" className="back-link">
-        <ArrowLeft size={16} />К снаряжению
-      </Link>
+      <Link to="/" className="back-link"><ArrowLeft size={16} />К снаряжению</Link>
+      
       <div className="page-heading">
         <div className="eyebrow">ВАШЕ МАЛЕНЬКОЕ ПРИКЛЮЧЕНИЕ</div>
-        <h1>
-          Забронировать{' '}
-          {category === 'skates' ? 'коньки' : category === 'skis' ? 'лыжи' : 'сноуборд'}
-        </h1>
-        <p>Подберите размер и время — остальное подождёт вас в прокате.</p>
+        <h1>Забронировать {category === 'skates' ? 'коньки' : category === 'skis' ? 'лыжи' : 'сноуборд'}</h1>
+        <p>Соберите комплект — остальное подождёт вас в прокате.</p>
       </div>
       <ol className="steps">
-        {['Размер', 'Дата и время', 'Ваши данные'].map((label, index) => (
+        {['Снаряжение', 'Дата и время', 'Ваши данные'].map((label, index) => (
           <li key={label} className={index === step ? 'current' : index < step ? 'done' : ''}>
-            <button
-              disabled={index >= step || booking.isPending}
-              onClick={() => goStep(index)}
-              aria-current={index === step ? 'step' : undefined}
-            >
+            <button disabled={index >= step || booking.isPending} onClick={() => goStep(index)} aria-current={index === step ? 'step' : undefined}>
               <span>{index < step ? <Check size={16} /> : index + 1}</span>
               {label}
             </button>
@@ -220,92 +247,63 @@ function BookingFlow({ category }: { category: CategoryCode }) {
           {step === 0 && (
             <>
               <div className="form-heading">
-                <span className="eyebrow"></span>
-                <h2>Всё начинается с размера</h2>
-                <p>
-                  {category === 'skates'
-                    ? 'Выберите привычный размер обуви.'
-                    : 'Выберите размер снаряжения и ботинок.'}
-                </p>
+                <h2>Выберите размеры</h2>
+                <p>Обязательные элементы отмечены звездочкой.</p>
               </div>
               {types.isPending && <Loading />}
-              <ErrorNotice
-                error={types.error}
-                retry={() => {
-                  void types.refetch()
-                }}
-              />
-              {category !== 'skates' && (
-                <fieldset>
-                  <legend>Размер {category === 'skis' ? 'лыж' : 'сноуборда'}</legend>
-                  <div className="size-options">
-                    {bucketOptions.map((option) => (
-                      <button
-                        type="button"
-                        key={option.id}
-                        aria-pressed={bucket === option.code}
-                        className={`choice ${bucket === option.code ? 'selected' : ''}`}
-                        onClick={() => {
-                          setBucket(option.code)
-                          resetSelection()
-                        }}
-                      >
-                        {option.code}
-                      </button>
-                    ))}
-                  </div>
-                  {types.isSuccess && bucketOptions.length === 0 && (
-                    <p className="muted">Размеры пока не добавлены. Попробуйте другую категорию.</p>
-                  )}
-                </fieldset>
-              )}
-              <fieldset>
-                <legend>
-                  {category === 'skates' ? 'Размер коньков' : 'Размер ботинок'} <span>EU</span>
-                </legend>
-                <div className="size-options">
-                  {Array.from({ length: 11 }, (_, i) => i + 36).map((n) => (
-                    <button
-                      type="button"
-                      key={n}
-                      aria-pressed={size === String(n)}
-                      className={`choice ${size === String(n) ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSize(String(n))
-                        resetSelection()
-                      }}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-                <label className="custom-size">
-                  Другой размер EU
-                  <input
-                    type="number"
-                    min="20"
-                    max="55"
-                    step="1"
-                    placeholder="Например, 35"
-                    value={size && (Number(size) < 36 || Number(size) > 46) ? size : ''}
-                    onChange={(event) => {
-                      setSize(event.target.value)
-                      resetSelection()
-                    }}
-                  />
-                </label>
-              </fieldset>
-              <div className="notice neutral">
-                <Info size={18} />
-                <span>Наличие вашего размера проверим на следующем шаге.</span>
+              <ErrorNotice error={types.error} retry={() => void types.refetch()} />
+
+              <div className="equipment-selection">
+                {types.data?.filter((t) => t.code !== 'goggles').map((type) => {
+                  const isNumeric = ['skate', 'ski_boot', 'snowboard_boot'].includes(type.code)
+                  const hasNoSize = type.size_options.length === 0 && !isNumeric
+                  
+                  return (
+                    <div key={type.code} className="equipment-row">
+                      <div className="equipment-label">
+                        {type.name}
+                        {type.is_required && <span className="required-mark">*</span>}
+                      </div>
+                      
+                      <div className="size-options">
+                        {hasNoSize ? (
+                          <button
+                            type="button"
+                            className={`choice ${selections[type.code] ? 'selected' : ''}`}
+                            onClick={() => setSelection(type.code, 'one-size')}
+                          >
+                            {selections[type.code] ? 'Добавлено' : 'Добавить'}
+                          </button>
+                        ) : isNumeric ? (
+                          Array.from({ length: 11 }, (_, i) => i + 36).map(n => (
+                            <button
+                              type="button"
+                              key={n}
+                              className={`choice ${selections[type.code] === String(n) ? 'selected' : ''}`}
+                              onClick={() => setSelection(type.code, String(n))}
+                            >
+                              {n}
+                            </button>
+                          ))
+                        ) : (
+                          type.size_options.map(opt => (
+                            <button
+                              type="button"
+                              key={opt.id}
+                              className={`choice ${selections[type.code] === opt.code ? 'selected' : ''}`}
+                              onClick={() => setSelection(type.code, opt.code)}
+                            >
+                              {opt.code}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
               <div className="form-actions">
-                <span>Подбор займёт всего пару минут</span>
-                <button
-                  className="button primary"
-                  disabled={!sizeReady || !types.isSuccess}
-                  onClick={() => goStep(1)}
-                >
+                <button className="button primary" disabled={!isReady || !types.isSuccess} onClick={() => goStep(1)} style={{ marginLeft: 'auto' }}>
                   Выбрать время <ArrowRight size={17} />
                 </button>
               </div>
@@ -314,9 +312,7 @@ function BookingFlow({ category }: { category: CategoryCode }) {
           {step === 1 && (
             <>
               <div className="form-heading">
-                <span className="eyebrow"></span>
                 <h2>Когда отправимся кататься?</h2>
-                <p>Выберите день и один или несколько часовых интервалов.</p>
               </div>
               <fieldset>
                 <legend>Дата проката</legend>
@@ -326,44 +322,22 @@ function BookingFlow({ category }: { category: CategoryCode }) {
                       className={`date-choice ${day === date ? 'selected' : ''}`}
                       aria-pressed={date === day}
                       key={day}
-                      onClick={() => {
-                        setDate(day)
-                        setHours([])
-                        booking.reset()
-                      }}
+                      onClick={() => { setDate(day); setHours([]); booking.reset(); }}
                     >
-                      <span>
-                        {day === now.date
-                          ? 'Сегодня'
-                          : new Intl.DateTimeFormat('ru', {
-                              weekday: 'short',
-                              timeZone: 'UTC',
-                            }).format(new Date(`${day}T12:00:00Z`))}
-                      </span>
+                      <span>{day === now.date ? 'Сегодня' : new Intl.DateTimeFormat('ru', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`))}</span>
                       <strong>{Number(day.slice(-2))}</strong>
-                      <small>
-                        {new Intl.DateTimeFormat('ru', { month: 'short', timeZone: 'UTC' }).format(
-                          new Date(`${day}T12:00:00Z`),
-                        )}
-                      </small>
+                      <small>{new Intl.DateTimeFormat('ru', { month: 'short', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`))}</small>
                     </button>
                   ))}
                 </div>
               </fieldset>
               <fieldset>
-                <legend>
-                  Время <span>Каждый интервал — 1 час</span>
-                </legend>
+                <legend>Время</legend>
                 {availability.isPending ? (
                   <Loading text="Проверяем свободное время…" />
                 ) : (
                   <>
-                    <ErrorNotice
-                      error={availability.error}
-                      retry={() => {
-                        void availability.refetch()
-                      }}
-                    />
+                    <ErrorNotice error={availability.error} retry={() => void availability.refetch()} />
                     <div className="hour-options">
                       {Array.from({ length: 10 }, (_, i) => i + 10).map((hour) => (
                         <button
@@ -372,9 +346,7 @@ function BookingFlow({ category }: { category: CategoryCode }) {
                           aria-pressed={hours.includes(hour)}
                           className={`choice hour ${hours.includes(hour) ? 'selected' : ''}`}
                           onClick={() => {
-                            setHours((old) =>
-                              old.includes(hour) ? old.filter((h) => h !== hour) : [...old, hour],
-                            )
+                            setHours(old => old.includes(hour) ? old.filter(h => h !== hour) : [...old, hour])
                             booking.reset()
                             setFormError('')
                           }}
@@ -383,143 +355,39 @@ function BookingFlow({ category }: { category: CategoryCode }) {
                         </button>
                       ))}
                     </div>
-                    {!availability.isError &&
-                      !Array.from({ length: 10 }, (_, i) => i + 10).some(selectable) && (
-                        <p className="notice neutral">
-                          На этот день свободных часов нет. Выберите другую дату или размер.
-                        </p>
-                      )}
+                    {!availability.isError && !Array.from({ length: 10 }, (_, i) => i + 10).some(selectable) && (
+                      <p className="notice neutral">На этот день свободных часов нет. Выберите другую дату.</p>
+                    )}
                   </>
                 )}
               </fieldset>
-              <div className="slot-legend">
-                <span>
-                  <i />
-                  Свободно
-                </span>
-                <span>
-                  <i />
-                  Выбрано
-                </span>
-                <span>
-                  <i />
-                  Недоступно
-                </span>
-              </div>
-              {hours.length > 0 && !validHours && (
-                <div className="notice error" role="alert">
-                  Доступность изменилась. Выберите свободные часы заново.
-                </div>
-              )}
               <div className="form-actions">
-                <button className="text-button" onClick={() => goStep(0)}>
-                  <ArrowLeft size={16} />
-                  Назад
-                </button>
-                <button className="button primary" disabled={!validHours} onClick={() => goStep(2)}>
-                  Продолжить <ArrowRight size={17} />
-                </button>
+                <button className="text-button" onClick={() => goStep(0)}><ArrowLeft size={16} />Назад</button>
+                <button className="button primary" disabled={!validHours} onClick={() => goStep(2)}>Продолжить <ArrowRight size={17} /></button>
               </div>
             </>
           )}
+
           {step === 2 && (
             <form onSubmit={submit}>
               <div className="form-heading">
-                <span className="eyebrow"></span>
                 <h2>На кого оформим бронь?</h2>
-                <p>Эти данные понадобятся, чтобы найти вашу бронь при выдаче.</p>
               </div>
               <div className="field-grid">
-                <label>
-                  Фамилия
-                  <input
-                    autoComplete="family-name"
-                    maxLength={100}
-                    required
-                    value={client.last_name}
-                    onChange={(e) => setClient({ ...client, last_name: e.target.value })}
-                    placeholder="Иванов"
-                  />
-                </label>
-                <label>
-                  Имя
-                  <input
-                    autoComplete="given-name"
-                    maxLength={100}
-                    required
-                    value={client.first_name}
-                    onChange={(e) => setClient({ ...client, first_name: e.target.value })}
-                    placeholder="Алексей"
-                  />
-                </label>
-                <label className="full-width">
-                  Отчество <span className="optional">необязательно</span>
-                  <input
-                    autoComplete="additional-name"
-                    maxLength={100}
-                    value={client.middle_name}
-                    onChange={(e) => setClient({ ...client, middle_name: e.target.value })}
-                    placeholder="Иванович"
-                  />
-                </label>
-                <label className="full-width">
-                  Номер телефона
-                  <input
-                    type="tel"
-                    aria-label="Номер телефона"
-                    aria-describedby="phone-help"
-                    autoComplete="tel"
-                    required
-                    maxLength={25}
-                    value={client.phone}
-                    onChange={(e) => setClient({ ...client, phone: e.target.value })}
-                    placeholder="+7 (999) 123-45-67"
-                  />
-                  <small id="phone-help">По этому номеру можно найти и отменить бронь.</small>
-                </label>
-              </div>
-              <div className="notice neutral">
-                <ShieldCheck size={19} />
-                <span>
-                  Регистрация не нужна. На один телефон можно оформить до 4 активных броней.
-                </span>
-              </div>
+                <label>Фамилия<input autoComplete="family-name" maxLength={100} required value={client.last_name} onChange={(e) => setClient({ ...client, last_name: e.target.value })} placeholder="Иванов" /></label>
+                <label>Имя<input autoComplete="given-name" maxLength={100} required value={client.first_name} onChange={(e) => setClient({ ...client, first_name: e.target.value })} placeholder="Алексей" /></label>
+                <label className="full-width">Отчество <span className="optional">необязательно</span><input autoComplete="additional-name" maxLength={100} value={client.middle_name} onChange={(e) => setClient({ ...client, middle_name: e.target.value })} placeholder="Иванович" /></label>
+                <label className="full-width">Номер телефона<input type="tel" autoComplete="tel" required maxLength={25} value={client.phone} onChange={(e) => setClient({ ...client, phone: e.target.value })} placeholder="+7 (999) 123-45-67" /></label>              </div>
               {uncertain && (
                 <div className="notice neutral">
                   <Info size={19} />
-                  <div>
-                    Не удалось получить подтверждение. Перед повторной отправкой проверьте,
-                    появилась ли бронь.
-                    <Link
-                      className="text-link"
-                      to="/my-bookings"
-                      state={{ phone: normalizePhone(client.phone) }}
-                    >
-                      Проверить мои брони <ArrowRight size={15} />
-                    </Link>
-                  </div>
+                  <div>Не удалось получить подтверждение. Проверьте, появилась ли бронь.<Link className="text-link" to="/my-bookings" state={{ phone: normalizePhone(client.phone) }}>Проверить мои брони <ArrowRight size={15} /></Link></div>
                 </div>
               )}
               <div className="form-actions">
-                <button
-                  type="button"
-                  disabled={booking.isPending}
-                  className="text-button"
-                  onClick={() => goStep(1)}
-                >
-                  <ArrowLeft size={16} />
-                  Назад
-                </button>
-                <button className="button primary" disabled={booking.isPending || !validHours}>
-                  {booking.isPending ? 'Оформляем…' : 'Подтвердить бронь'}
-                  <Check size={17} />
-                </button>
+                <button type="button" disabled={booking.isPending} className="text-button" onClick={() => goStep(1)}><ArrowLeft size={16} />Назад</button>
+                <button className="button primary" disabled={booking.isPending || !validHours}>{booking.isPending ? 'Оформляем…' : 'Подтвердить бронь'} <Check size={17} /></button>
               </div>
-              {!validHours && (
-                <p className="muted">
-                  Вернитесь на шаг «Дата и время», чтобы проверить доступность.
-                </p>
-              )}
             </form>
           )}
         </section>
@@ -530,30 +398,13 @@ function BookingFlow({ category }: { category: CategoryCode }) {
           <div className="summary-body">
             <div className="eyebrow">ВАШ ВЫБОР</div>
             <h2>{info.name}</h2>
-            <p>
-              {category === 'skates'
-                ? 'Пара коньков'
-                : category === 'skis'
-                  ? 'Лыжи + лыжные ботинки'
-                  : 'Сноуборд + ботинки'}
-            </p>
             <dl>
-              <div>
-                <dt>Размер</dt>
-                <dd>
-                  {category === 'skates'
-                    ? size
-                      ? `${size} EU`
-                      : 'Не выбран'
-                    : bucket || 'Не выбран'}
-                </dd>
-              </div>
-              {category !== 'skates' && (
-                <div>
-                  <dt>Ботинки</dt>
-                  <dd>{size ? `${size} EU` : 'Не выбраны'}</dd>
+              {types.data?.filter(t => selections[t.code]).map(t => (
+                <div key={t.code}>
+                  <dt>{t.name}</dt>
+                  <dd>{selections[t.code] === 'one-size' ? '✓' : selections[t.code]}</dd>
                 </div>
-              )}
+              ))}
               <div>
                 <dt>Дата</dt>
                 <dd>{step > 0 ? dateLabel(date) : 'Не выбрана'}</dd>
@@ -563,10 +414,6 @@ function BookingFlow({ category }: { category: CategoryCode }) {
                 <dd>{hours.length ? hoursLabel(hours) : 'Не выбрано'}</dd>
               </div>
             </dl>
-            <div className="summary-note">
-              <Clock3 size={16} />
-              Прокат работает с 10:00 до 20:00
-            </div>
           </div>
         </aside>
       </div>

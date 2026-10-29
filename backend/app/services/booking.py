@@ -13,6 +13,7 @@ from app.models import (
     InventoryItem,
     ItemStatus,
     ItemType,
+    ItemTypeCategory,
     SizeOption,
 )
 from app.schemas.booking import BookingCreate
@@ -65,6 +66,10 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
     if not category:
         raise HTTPException(404, "Категория не найдена")
 
+    extra_items: dict[str, tuple[int | None, str | None]] = {}
+    for item in payload.selected_items:
+        extra_items[item.item_type_code] = (item.size_value, item.size_bucket)
+
     if payload.category == "skates":
         if payload.size_value is None:
             raise HTTPException(400, "Для коньков нужен size_value")
@@ -81,7 +86,28 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
     else:
         raise HTTPException(400, "Неизвестная категория")
 
+    required_from_db = db.execute(
+        select(ItemType.code)
+        .join(ItemTypeCategory, ItemTypeCategory.item_type_id == ItemType.id)
+        .where(
+            ItemTypeCategory.category_id == category.id,
+            ItemTypeCategory.is_required == True,
+        )
+    ).scalars().all()
 
+    base_codes = {t[0] for t in required_types}
+    for req_code in required_from_db:
+        if req_code in base_codes:
+            continue
+        if req_code not in extra_items:
+            raise HTTPException(
+                400,
+                f"Для категории «{category.name}» обязательно выбрать: {req_code}"
+            )
+
+    all_required: list[tuple[str, int | None, str | None]] = list(required_types)
+    for code, (sv, sb) in extra_items.items():
+        all_required.append((code, sv, sb))
 
     active_status = db.execute(
         select(BookingStatus).where(BookingStatus.code == "active")
@@ -113,7 +139,7 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
 
     selected_items: list[InventoryItem] = []
 
-    for type_code, size_value, size_bucket in required_types:
+    for type_code, size_value, size_bucket in all_required:
         item_type = _get_type(db, type_code)
 
         stmt = select(InventoryItem).where(
@@ -141,7 +167,8 @@ def create_booking(db: Session, payload: BookingCreate) -> Booking:
             raise HTTPException(
                 409,
                 f"На выбранные часы нет свободной единицы: {item_type.name} "
-                f"(размер: {size_value or size_bucket})"
+
+                f"(размер: {size_value or size_bucket or 'без размера'})"
             )
 
         selected_items.append(chosen)

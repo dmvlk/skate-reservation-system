@@ -15,6 +15,11 @@ export interface Availability {
   category: string
   days: { date: string; available_hours: number[] }[]
 }
+export interface SelectedItem {
+  item_type_code: string
+  size_value?: number
+  size_bucket?: string
+}
 export interface BookingCreate {
   category: CategoryCode
   phone: string
@@ -26,6 +31,7 @@ export interface BookingCreate {
   size_value?: number
   size_bucket?: string
   boot_size_value?: number
+  selected_items?: SelectedItem[]
 }
 export interface BookingReceipt {
   id: number

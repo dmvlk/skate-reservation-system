@@ -67,7 +67,6 @@ export function App() {
       <footer className="site-footer">
         <div className="container footer-inner">
           <Brand />
-          <p>Больше времени на зиму.</p>
           <Link to="/admin">
             Для сотрудников <ArrowUpRight size={14} />
           </Link>

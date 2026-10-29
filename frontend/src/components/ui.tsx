@@ -4,12 +4,12 @@ import { Link } from 'react-router'
 
 export function Brand() {
   return (
-    <Link to="/" className="brand" aria-label="СНЕГ — главная">
+    <Link to="/" className="brand" aria-label="Скользи! - главная">
       <span className="brand-icon">
         <MountainSnow size={25} strokeWidth={1.6} />
       </span>
       <span>
-        снег<span className="brand-dot">.</span>
+        скользи<span className="brand-dot">!</span>
       </span>
       <small>ПРОКАТ СНАРЯЖЕНИЯ</small>
     </Link>
