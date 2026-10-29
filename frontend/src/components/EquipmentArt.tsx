@@ -3,9 +3,7 @@ import type { CategoryCode } from '../types'
 const ice = '#cfe0f0'
 const blue = '#7fb3dc'
 const deep = '#1e3a5f'
-const dark = '#0f2440'
 const accent = '#d94a4a'
-const light = '#f6f9fc'
 
 export function EquipmentArt({ kind }: { kind: CategoryCode }) {
   return (

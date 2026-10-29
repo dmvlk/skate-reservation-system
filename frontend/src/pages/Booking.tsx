@@ -23,7 +23,8 @@ import {
 } from '../lib/format'
 import { QRCodeSVG } from 'qrcode.react'
 import { EquipmentArt } from '../components/EquipmentArt'
-import { ErrorNotice, Loading } from '../components/ui'
+import { ErrorNotice, Loading, Modal } from '../components/ui'
+import { SizeTable } from '../components/SizeGuide'
 import type { BookingCreate, CategoryCode, SelectedItem } from '../types'
 
 export function Booking() {
@@ -61,7 +62,8 @@ function BookingFlow({ category }: { category: CategoryCode }) {
     queryKey: ['item-types', category],
     queryFn: ({ signal }) => api.itemTypes(category, signal),
   })
-
+  const [showSizes, setShowSizes] = useState(false)
+  const [gender, setGender] = useState<'male' | 'female'>('male')
   const isReady = types.data?.every((t) => !t.is_required || !!selections[t.code]) ?? false
 
   const availabilityParams = (() => {
@@ -122,7 +124,15 @@ function BookingFlow({ category }: { category: CategoryCode }) {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
   const setSelection = (code: string, size: string) => {
-    setSelections(prev => ({ ...prev, [code]: size }))
+    setSelections(prev => {
+      const next = { ...prev }
+      if (next[code] === size) {
+        delete next[code]
+      } else {
+        next[code] = size
+      }
+      return next
+    })
     resetSelection()
   }
 
@@ -189,7 +199,7 @@ function BookingFlow({ category }: { category: CategoryCode }) {
         </div>
         <div className="eyebrow">ВСТРЕТИМСЯ НА ПРОКАТЕ</div>
         <h1>Всё готово к вашему дню</h1>
-        <p className="lead">Бронь оформлена. Сохраните её номер и назовите при получении.</p>
+        <p className="lead">Бронь оформлена. Сохраните ее номер и назовите при получении.</p>
         <div className="ticket">
           <div className="ticket-top">
             <span className="eyebrow">ВАША БРОНЬ № {booking.data.id}</span>
@@ -235,7 +245,7 @@ function BookingFlow({ category }: { category: CategoryCode }) {
       <div className="page-heading">
         <div className="eyebrow">ВАШЕ МАЛЕНЬКОЕ ПРИКЛЮЧЕНИЕ</div>
         <h1>Забронировать {category === 'skates' ? 'коньки' : category === 'skis' ? 'лыжи' : 'сноуборд'}</h1>
-        <p>Соберите комплект — остальное подождёт вас в прокате.</p>
+        <p>Соберите комплект - остальное подождет вас в прокате.</p>
       </div>
       <ol className="steps">
         {['Снаряжение', 'Дата и время', 'Ваши данные'].map((label, index) => (
@@ -253,9 +263,26 @@ function BookingFlow({ category }: { category: CategoryCode }) {
           <ErrorNotice error={formError} />
           {step === 0 && (
             <>
-              <div className="form-heading">
-                <h2>Выберите размеры</h2>
-                <p>Обязательные элементы отмечены звездочкой.</p>
+              <div className="form-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap' }}>
+                <div>
+                  <h2>Выберите размеры</h2>
+                </div>
+                <div className="segmented" style={{ marginTop: '4px' }}>
+                  <button 
+                    type="button" 
+                    className={gender === 'male' ? 'selected' : ''} 
+                    onClick={() => setGender('male')}
+                  >
+                    Мужской
+                  </button>
+                  <button 
+                    type="button" 
+                    className={gender === 'female' ? 'selected' : ''} 
+                    onClick={() => setGender('female')}
+                  >
+                    Женский
+                  </button>
+                </div>
               </div>
               {types.isPending && <Loading />}
               <ErrorNotice error={types.error} retry={() => void types.refetch()} />
@@ -269,7 +296,6 @@ function BookingFlow({ category }: { category: CategoryCode }) {
                     <div key={type.code} className="equipment-row">
                       <div className="equipment-label">
                         {type.name}
-                        {type.is_required && <span className="required-mark">*</span>}
                       </div>
                       
                       <div className="size-options">
@@ -309,8 +335,16 @@ function BookingFlow({ category }: { category: CategoryCode }) {
                   )
                 })}
               </div>
-              <div className="form-actions">
-                <button className="button primary" disabled={!isReady || !types.isSuccess} onClick={() => goStep(1)} style={{ marginLeft: 'auto' }}>
+              <div className="form-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setShowSizes(true)}
+                  style={{ fontSize: '13px', color: 'var(--primary)', textDecoration: 'underline' }}
+                >
+                  Таблица размеров
+                </button>
+                <button className="button primary" disabled={!isReady || !types.isSuccess} onClick={() => goStep(1)}>
                   Выбрать время <ArrowRight size={17} />
                 </button>
               </div>
@@ -424,6 +458,21 @@ function BookingFlow({ category }: { category: CategoryCode }) {
           </div>
         </aside>
       </div>
+      {showSizes && (
+        <Modal title="Таблица размеров" close={() => setShowSizes(false)}>
+          <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
+            {types.data?.map(t => {
+              if (['skate', 'ski_boot', 'snowboard_boot', 'ski', 'snowboard', 'helmet', 'gloves', 'jacket', 'pants'].includes(t.code)) {
+                return <SizeTable key={t.code} typeCode={t.code} gender={gender} />
+              }
+              return null
+            })}
+          </div>
+          <div className="button-row">
+            <button className="button secondary" onClick={() => setShowSizes(false)}>Закрыть</button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

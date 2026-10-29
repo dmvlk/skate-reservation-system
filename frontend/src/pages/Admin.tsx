@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import {
-  ArrowLeft,
   ArrowRight,
   Boxes,
   Check,
   ClipboardList,
-  KeyRound,
   LogOut,
   Plus,
   Search,
-  ShieldCheck,
   Trash2,
   Wrench,
 } from 'lucide-react'
@@ -59,7 +56,7 @@ export function AdminLogin() {
       >
         <h1>Вход для сотрудников</h1>
         {location.state?.expired && (
-          <div className="notice neutral">Сессия завершилась. Войдите ещё раз.</div>
+          <div className="notice neutral">Сессия завершилась. Войдите еще раз.</div>
         )}
         <ErrorNotice error={mutation.error} />
         <label>
@@ -329,7 +326,7 @@ export function AdminBookings() {
           <p className="muted">
             {action.kind === 'issue'
               ? 'Снаряжение будет отмечено как выданное.'
-              : 'Бронь завершится, а снаряжение станет доступным. Если обнаружена поломка, отметьте её затем во вкладке «Инвентарь».'}
+              : 'Бронь завершится, а снаряжение станет доступным. Если обнаружена поломка, отметьте ее затем во вкладке «Инвентарь».'}
           </p>
           <ErrorNotice error={mutation.error} />
           <div className="button-row">
@@ -586,7 +583,7 @@ export function AdminInventory() {
               </div>
               <div className="table-footer">
                 Найдено единиц: {rows.length}
-                <span>Выдача и возврат — во вкладке «Бронирования»</span>
+                <span>Выдача и возврат - во вкладке «Бронирования»</span>
               </div>
             </>
           ) : (

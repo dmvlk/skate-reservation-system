@@ -6,8 +6,6 @@ import type {
   BookingCreate,
   BookingReceipt,
   Category,
-  ExtendResponse,
-  ExtensionOptions,
   InventoryCreate,
   InventoryItem,
   ItemType,

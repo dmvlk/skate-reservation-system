@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDown, ArrowRight, Check, Clock3, Snowflake } from 'lucide-react'
+import { ArrowDown } from 'lucide-react'
 import { Link } from 'react-router'
 import { api } from '../lib/api'
 import { categories, isCategory } from '../lib/format'

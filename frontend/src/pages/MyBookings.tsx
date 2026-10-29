@@ -5,7 +5,7 @@ import { ArrowRight, CalendarDays, Clock3, Search, Timer } from 'lucide-react'
 import { api } from '../lib/api'
 import { categoryName, dateLabel, hoursLabel, normalizePhone, validPhone } from '../lib/format'
 import { QRCodeSVG } from 'qrcode.react'
-import { Empty, ErrorNotice, Loading, Modal, Status, SuccessNotice } from '../components/ui'
+import { Empty, ErrorNotice, Loading, Modal, SuccessNotice } from '../components/ui'
 import type { MyBooking } from '../types'
 
 export function MyBookings() {
@@ -105,7 +105,7 @@ export function MyBookings() {
       <div className="page-heading">
         <div className="eyebrow">ВАШИ ПЛАНЫ НА ЗИМУ</div>
         <h1>Мои брони</h1>
-        <p>Всё снаряжение и время — в одном месте.</p>
+        <p>Все снаряжение и время - в одном месте.</p>
       </div>
       <form className="panel lookup-form" onSubmit={search}>
         <label>
@@ -139,7 +139,7 @@ export function MyBookings() {
       />
       {notice && <SuccessNotice>{notice}</SuccessNotice>}
       {!phone && (
-        <Empty title="Найдём ваши зимние планы">
+        <Empty title="Найдем ваши зимние планы">
           Укажите номер телефона, который использовали при оформлении.
         </Empty>
       )}

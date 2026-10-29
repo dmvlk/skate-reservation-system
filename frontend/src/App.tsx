@@ -55,7 +55,7 @@ export function App() {
               <div className="container not-found">
                 <MountainSnow size={60} />
                 <h1>Кажется, вы сбились с маршрута</h1>
-                <p>Такой страницы нет. Вернёмся к снаряжению?</p>
+                <p>Такой страницы нет. Вернемся к снаряжению?</p>
                 <Link className="button primary" to="/">
                   На главную
                 </Link>
