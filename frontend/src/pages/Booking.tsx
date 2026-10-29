@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock3,
   Info,
-  ShieldCheck,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { api, ApiError } from '../lib/api'
@@ -22,6 +21,7 @@ import {
   rentalNow,
   validPhone,
 } from '../lib/format'
+import { QRCodeSVG } from 'qrcode.react'
 import { EquipmentArt } from '../components/EquipmentArt'
 import { ErrorNotice, Loading } from '../components/ui'
 import type { BookingCreate, CategoryCode, SelectedItem } from '../types'
@@ -192,9 +192,8 @@ function BookingFlow({ category }: { category: CategoryCode }) {
         <p className="lead">Бронь оформлена. Сохраните её номер и назовите при получении.</p>
         <div className="ticket">
           <div className="ticket-top">
-            <span>ВАША БРОНЬ</span>
-            <strong>№ {booking.data.id}</strong>
-            <span className="status status-active">
+            <span className="eyebrow">ВАША БРОНЬ № {booking.data.id}</span>
+            <span className="status status-active" style={{ marginLeft: 'auto' }}>
               <span />
               Забронировано
             </span>
@@ -210,7 +209,15 @@ function BookingFlow({ category }: { category: CategoryCode }) {
               {hoursLabel(booking.data.hours)}
             </span>
           </div>
-          <div className="ticket-foot">Телефон заканчивается на {booking.data.phone_last4}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '24px 0' }}>
+            <QRCodeSVG 
+              value={String(booking.data.id)} 
+              size={140} 
+              bgColor={"#ffffff"}
+              fgColor={"#1e3a5f"}
+              level={"H"}
+            />
+          </div>
         </div>
         <div className="button-row">
           <Link to="/my-bookings" state={{ phone: normalizePhone(client.phone) }} className="button primary">

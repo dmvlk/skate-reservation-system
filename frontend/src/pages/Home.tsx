@@ -65,6 +65,23 @@ export function Home() {
           {Object.entries(categories).map(([code, info]) => {
             if (!isCategory(code)) return null
             const exists = catalog.data?.some((c) => c.code === code)
+
+            if (exists) {
+              return (
+                <Link to={`/booking/${code}`} className={`category-card category-${code}`} key={code}>
+                  <div className="category-visual">
+                    <EquipmentArt kind={code} />
+                  </div>
+                  <div className="category-copy">
+                    <div>
+                      <h3>{info.name}</h3>
+                      <p>{info.description}</p>
+                    </div>
+                  </div>
+                </Link>
+              )
+            }
+
             return (
               <article className={`category-card category-${code}`} key={code}>
                 <div className="category-visual">
@@ -75,58 +92,13 @@ export function Home() {
                     <h3>{info.name}</h3>
                     <p>{info.description}</p>
                   </div>
-                  {exists ? (
-                    <Link
-                      to={`/booking/${code}`}
-                      className="round-link"
-                      aria-label={`Забронировать: ${info.name}`}
-                    >
-                      <ArrowRight size={22} />
-                    </Link>
-                  ) : (
-                    <span className="unavailable-label">
-                      {catalog.isPending ? 'Загрузка' : 'Недоступно'}
-                    </span>
-                  )}
+                  <span className="unavailable-label">
+                    {catalog.isPending ? 'Загрузка' : 'Недоступно'}
+                  </span>
                 </div>
               </article>
             )
           })}
-        </div>
-      </section>
-      <section className="how-section">
-        <div>
-          <div className="eyebrow">ВСЁ ПРОСТО</div>
-          <h2>
-            До приключения —<br /> всего три шага
-          </h2>
-          <Link to="/my-bookings" className="text-link">
-            Уже забронировали? <ArrowRight size={16} />
-          </Link>
-        </div>
-        <div className="how-step">
-          <span>1</span>
-          <h3>Найдите своё</h3>
-          <p>
-            Выберите снаряжение
-            <br />и подходящий размер.
-          </p>
-        </div>
-        <div className="how-step">
-          <span>2</span>
-          <h3>Выберите время</h3>
-          <p>
-            Свободные часы видны сразу.
-            <br /> Планируйте на неделю вперёд.
-          </p>
-        </div>
-        <div className="how-step">
-          <span>3</span>
-          <h3>Приходите кататься</h3>
-          <p>
-            Сохраните номер брони
-            <br />и назовите его при получении.
-          </p>
         </div>
       </section>
     </div>

@@ -50,10 +50,6 @@ export function AdminLogin() {
   if (authToken.get()) return <Navigate to="/admin" replace />
   return (
     <div className="container page login-page">
-      <Link className="back-link" to="/">
-        <ArrowLeft size={16} />
-        На главную
-      </Link>
       <form
         className="panel login-panel"
         onSubmit={(e) => {
@@ -61,12 +57,7 @@ export function AdminLogin() {
           if (!mutation.isPending) mutation.mutate()
         }}
       >
-        <div className="login-icon">
-          <KeyRound size={26} />
-        </div>
-        <div className="eyebrow">РАБОЧЕЕ МЕСТО</div>
         <h1>Вход для сотрудников</h1>
-        <p>Бронирования, выдача и учёт снаряжения.</p>
         {location.state?.expired && (
           <div className="notice neutral">Сессия завершилась. Войдите ещё раз.</div>
         )}
@@ -96,12 +87,7 @@ export function AdminLogin() {
         </label>
         <button className="button primary" disabled={mutation.isPending}>
           {mutation.isPending ? 'Входим…' : 'Войти'}
-          <ArrowRight size={17} />
         </button>
-        <small>
-          <ShieldCheck size={14} />
-          Доступ только для сотрудников проката
-        </small>
       </form>
     </div>
   )
@@ -156,11 +142,7 @@ export function AdminLayout() {
     )
   return (
     <div className="container page admin-page">
-      <div className="admin-heading">
-        <div>
-          <div className="eyebrow">СНЕГ / РАБОЧЕЕ МЕСТО</div>
-          <h1>Пункт проката</h1>
-        </div>
+      <div className="admin-heading" style={{ justifyContent: 'flex-end' }}>
         <div className="admin-user">
           <span>
             {[me.data.first_name, me.data.last_name].filter(Boolean).join(' ') || me.data.username}
@@ -246,12 +228,7 @@ export function AdminBookings() {
   }
   return (
     <>
-      <div className="section-heading admin-section-title">
-        <div>
-          <h2>Найти бронирование</h2>
-          <p>Введите телефон клиента или номер его брони.</p>
-        </div>
-      </div>
+
       <form className="panel admin-search" onSubmit={submit}>
         <div className="segmented">
           {(['phone', 'id'] as const).map((value) => (
@@ -292,23 +269,9 @@ export function AdminBookings() {
           </button>
         </div>
       </form>
-      <ErrorNotice
-        error={error || bookings.error}
-        retry={
-          bookings.error
-            ? () => {
-                void bookings.refetch()
-              }
-            : undefined
-        }
-      />
+      <ErrorNotice error={error || bookings.error} />
       {notice && <SuccessNotice>{notice}</SuccessNotice>}
       {search && bookings.isPending && <Loading />}
-      {!search && (
-        <Empty title="Готовы к новому дню">
-          Найдите бронь, чтобы выдать снаряжение или принять возврат.
-        </Empty>
-      )}
       {bookings.isSuccess && bookings.data.length === 0 && (
         <Empty title="Бронирования не найдены">Проверьте полный номер телефона клиента.</Empty>
       )}

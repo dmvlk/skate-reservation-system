@@ -4,6 +4,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { ArrowRight, CalendarDays, Clock3, Search, Timer } from 'lucide-react'
 import { api } from '../lib/api'
 import { categoryName, dateLabel, hoursLabel, normalizePhone, validPhone } from '../lib/format'
+import { QRCodeSVG } from 'qrcode.react'
 import { Empty, ErrorNotice, Loading, Modal, Status, SuccessNotice } from '../components/ui'
 import type { MyBooking } from '../types'
 
@@ -21,6 +22,7 @@ export function MyBookings() {
   const [extendSlider, setExtendSlider] = useState(1)
   const [notice, setNotice] = useState('')
   const cache = useQueryClient()
+  const [zoomQr, setZoomQr] = useState<number | null>(null)
 
   const bookings = useQuery({
     queryKey: ['my-bookings', phone],
@@ -159,62 +161,78 @@ export function MyBookings() {
 
           return (
             <article className="panel reservation-card" key={booking.id}>
-              <div className="reservation-top">
-                <span className="eyebrow">БРОНЬ № {booking.id}</span>
-                <Status value={booking.status} />
-              </div>
-              <h2>{categoryName(booking.category)}</h2>
-              <div className="reservation-meta">
-                <span>
-                  <CalendarDays size={17} />
-                  {dateLabel(booking.booking_date)}
-                </span>
-                <span>
-                  <Clock3 size={17} />
-                  {hoursLabel(booking.hours)}
-                </span>
-              </div>
-              <div className="item-tags">
-                {booking.items.map((item, i) => (
-                  <span key={i}>
-                    {item.item_type}
-                    {item.size ? ` · ${item.size}` : ''}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
+              <div style={{ flex: 1 }}>
+                <div className="reservation-top">
+                  <span className="eyebrow">БРОНЬ № {booking.id}</span>
+                </div>
+                <h2>{categoryName(booking.category)}</h2>
+                <div className="reservation-meta" style={{ flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                  <span>
+                    <CalendarDays size={17} />
+                    {dateLabel(booking.booking_date)}
                   </span>
-                ))}
-              </div>
-              <div className="reservation-bottom">
-                <small>Назовите номер брони сотруднику при получении.</small>
-                <div className="reservation-actions">
-                  {booking.status === 'active' && (
-                    <>
-                      <button
-                        className="text-button"
-                        disabled={!canExtend || extQuery?.isPending}
-                        title={
-                          !extOptions
-                            ? 'Проверяем возможность продления…'
-                            : extOptions.available_extension_hours.length === 0
-                              ? 'Продление недоступно: следующие часы заняты'
-                              : undefined
-                        }
-                        onClick={() => openExtend(booking)}
-                      >
-                        <Timer size={15} />
-                        {extQuery?.isPending ? 'Проверяем…' : 'Продлить'}
-                      </button>
-                      <button
-                        className="text-button danger-text"
-                        onClick={() => {
-                          cancel.reset()
-                          setSelectedCancel(booking)
-                        }}
-                      >
-                        Отменить бронь
-                      </button>
-                    </>
-                  )}
+                  <span>
+                    <Clock3 size={17} />
+                    {hoursLabel(booking.hours)}
+                  </span>
+                </div>
+                <div className="item-tags" style={{ marginTop: '16px' }}>
+                  {booking.items.map((item, i) => (
+                    <span key={i}>
+                      {item.item_type}
+                      {item.size ? ` · ${item.size}` : ''}
+                    </span>
+                  ))}
                 </div>
               </div>
+              <div 
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', cursor: 'pointer', flexShrink: 0 }}
+                onClick={() => setZoomQr(booking.id)}
+                title="Увеличить QR-код"
+              >
+                <QRCodeSVG 
+                  value={String(booking.id)} 
+                  size={80} 
+                  bgColor={"#ffffff"}
+                  fgColor={"#1e3a5f"}
+                  level={"M"}
+                />
+                <span style={{ fontSize: '10px', color: '#8a9aaa' }}></span>
+              </div>
+            </div>
+            <div className="reservation-bottom" style={{ justifyContent: 'flex-end', paddingTop: '16px', marginTop: '16px' }}>
+              <div className="reservation-actions">
+                {booking.status === 'active' && (
+                  <>
+                    <button
+                      className="text-button"
+                      disabled={!canExtend || extQuery?.isPending}
+                      title={
+                        !extOptions
+                          ? 'Проверяем возможность продления…'
+                          : extOptions.available_extension_hours.length === 0
+                            ? 'Продление недоступно: следующие часы заняты'
+                            : undefined
+                      }
+                      onClick={() => openExtend(booking)}
+                    >
+                      <Timer size={15} />
+                      {extQuery?.isPending ? 'Проверяем…' : 'Продлить'}
+                    </button>
+                    <button
+                      className="text-button danger-text"
+                      onClick={() => {
+                        cancel.reset()
+                        setSelectedCancel(booking)
+                      }}
+                    >
+                      Отменить бронь
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
             </article>
           )
         })}
@@ -327,6 +345,22 @@ export function MyBookings() {
               </>
             )
           })()}
+        </Modal>
+      )}
+      {zoomQr !== null && (
+        <Modal
+          title=""
+          close={() => setZoomQr(null)}
+        >
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px' }}>
+            <QRCodeSVG 
+              value={String(zoomQr)} 
+              size={260} 
+              bgColor={"#ffffff"}
+              fgColor={"#1e3a5f"}
+              level={"H"}
+            />
+          </div>
         </Modal>
       )}
     </div>
