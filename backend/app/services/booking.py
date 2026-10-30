@@ -298,21 +298,20 @@ def get_extension_options(db: Session, booking_id: int, phone: str) -> dict:
 
     current_hours = sorted([s.hour for s in booking.slots])
     if not current_hours:
-        return {
-            "booking_id": booking.id,
-            "current_hours": [],
-            "available_extension_hours": [],
-        }
+        return {"booking_id": booking.id, "current_hours": [], "available_extension_hours": []}
 
     last_hour = max(current_hours)
     booking_date = booking.slots[0].booking_date
 
-    item_ids = [bi.inventory_item_id for bi in booking.items]
+    base_codes = ["skate", "ski", "snowboard", "ski_boot", "snowboard_boot"]
+    base_item_ids = [
+        bi.inventory_item_id 
+        for bi in booking.items 
+        if bi.inventory_item.item_type.code in base_codes
+    ]
 
     busy_statuses = db.execute(
-        select(BookingStatus).where(
-            BookingStatus.code.in_(["active", "issued"])
-        )
+        select(BookingStatus).where(BookingStatus.code.in_(["active", "issued"]))
     ).scalars().all()
     busy_status_ids = [s.id for s in busy_statuses]
 
@@ -324,7 +323,7 @@ def get_extension_options(db: Session, booking_id: int, phone: str) -> dict:
             BookingSlot.booking_date == booking_date,
             Booking.id != booking.id,
             Booking.status_id.in_(busy_status_ids),
-            BookingItem.inventory_item_id.in_(item_ids),
+            BookingItem.inventory_item_id.in_(base_item_ids),
         )
     ).all()
     busy_hours_other = {row[0] for row in other_busy_rows}
@@ -387,7 +386,15 @@ def extend_booking(
             f"Продление возможно только на следующий час после {last_hour}:00. "
         )
 
-    item_ids = [bi.inventory_item_id for bi in booking.items]
+    base_codes = ["skate", "ski", "snowboard", "ski_boot", "snowboard_boot"]
+    base_item_ids = [
+        bi.inventory_item_id 
+        for bi in booking.items 
+        if bi.inventory_item.item_type.code in base_codes
+    ]
+
+    if not base_item_ids:
+        raise HTTPException(400, "В брони нет базового снаряжения")
 
     busy_statuses = db.execute(
         select(BookingStatus).where(
@@ -404,7 +411,7 @@ def extend_booking(
             BookingSlot.booking_date == booking_date,
             Booking.id != booking.id,
             Booking.status_id.in_(busy_status_ids),
-            BookingItem.inventory_item_id.in_(item_ids),
+            BookingItem.inventory_item_id.in_(base_item_ids), # Проверяем только базовые вещи
             BookingSlot.hour.in_(hours_to_add),
         )
         .limit(1)

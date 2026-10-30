@@ -78,7 +78,7 @@ def seed_item_types(db, categories):
         ("snowboard", "Сноуборд", ["snowboard"], True),
         ("snowboard_boot", "Ботинки для сноуборда", ["snowboard"], True),
         ("helmet", "Шлем", ["skis", "snowboard"], True),
-        ("goggles", "Очки (маска)", ["skis", "snowboard"], True),
+        ("goggles", "Очки (маска)", ["skis", "snowboard"], False),
         ("jacket", "Куртка", ["skis", "snowboard"], True),
         ("pants", "Штаны", ["skis", "snowboard"], True),
         ("gloves", "Перчатки", ["skis", "snowboard"], True),
@@ -117,8 +117,6 @@ def seed_size_options(db, item_types):
         "jacket": ["S", "M", "L", "XL"],
         "pants": ["S", "M", "L", "XL"],
         "gloves": ["S", "M", "L", "XL"],
-        "elbow_pads": ["S", "M", "L", "XL"],
-        "knee_pads": ["S", "M", "L", "XL"],
     }
 
     for type_code, codes in data.items():
@@ -168,15 +166,19 @@ def seed_inventory(db, item_types, statuses):
 
     # коньки
     counter = 1
-    for size in [38, 40, 42, 44]:
-        for _ in range(2):
+    edge_sizes = [36, 37, 38, 39, 45, 46]
+    mid_sizes = [40, 41, 42, 43, 44]
+    
+    for size in sorted(edge_sizes + mid_sizes):
+        count = 3 if size in edge_sizes else 5
+        for _ in range(count):
             _add_item(db, item_types["skate"].id, available.id, f"SK-{counter:03d}", size_value=size)
             counter += 1
 
     # лыжи/сноуборды
     for type_code, prefix, buckets, count in [
-        ("ski", "LS", ["M", "L"], 2),
-        ("snowboard", "SB", ["M", "L"], 2),
+        ("ski", "LS", ["M", "L"], 5),
+        ("snowboard", "SB", ["M", "L"], 5),
     ]:
         counter = 1
         for bucket in buckets:
@@ -188,26 +190,33 @@ def seed_inventory(db, item_types, statuses):
     # ботинки
     for type_code, prefix in [("ski_boot", "LB"), ("snowboard_boot", "SBB")]:
         counter = 1
-        for size in [40, 42, 44]:
-            for _ in range(2):
+        for size in sorted(edge_sizes + mid_sizes):
+            count = 3 if size in edge_sizes else 5
+            for _ in range(count):
                 _add_item(db, item_types[type_code].id, available.id, f"{prefix}-{counter:03d}", size_value=size)
                 counter += 1
 
     # шлем
     for bucket in ["S", "M", "L"]:
         so = db.execute(select(SizeOption).filter_by(item_type_id=item_types["helmet"].id, code=bucket)).scalar_one()
-        for i in range(1, 3):
+        for i in range(1, 6):
             _add_item(db, item_types["helmet"].id, available.id, f"HL-{bucket}-{i}", size_option_id=so.id)
 
-    # одежда/защита
-    clothing = ["jacket", "pants", "gloves", "elbow_pads", "knee_pads"]
+    # одежда
+    clothing = ["jacket", "pants", "gloves"]
     for type_code in clothing:
         for bucket in ["S", "M", "L", "XL"]:
             so = db.execute(select(SizeOption).filter_by(item_type_id=item_types[type_code].id, code=bucket)).scalar_one()
-            _add_item(db, item_types[type_code].id, available.id, f"{type_code.upper()}-{bucket}", size_option_id=so.id)
+            for i in range(1, 16):
+                _add_item(db, item_types[type_code].id, available.id, f"{type_code.upper()}-{bucket}-{i:02d}", size_option_id=so.id)
+
+    # защита
+    for type_code in ["elbow_pads", "knee_pads"]:
+        for i in range(1, 16):
+            _add_item(db, item_types[type_code].id, available.id, f"{type_code.upper()}-{i:02d}")
 
     # очки
-    for i in range(1, 4):
+    for i in range(1, 16):
         _add_item(db, item_types["goggles"].id, available.id, f"GG-{i:03d}")
 
 

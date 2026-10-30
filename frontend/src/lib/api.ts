@@ -11,6 +11,8 @@ import type {
   ItemType,
   LoginResult,
   MyBooking,
+  ExtendResponse,
+  ExtensionOptions,
 } from '../types'
 
 const BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '')
@@ -107,6 +109,16 @@ export const api = {
     request<MyBooking[]>(`/my-bookings?${query({ phone })}`, { signal }),
   cancel: (id: number, phone: string) =>
     request<ActionResult>(`/my-bookings/${id}/cancel?${query({ phone })}`, post()),
+  extensionOptions: (id: number, phone: string, signal?: AbortSignal) =>
+    request<ExtensionOptions>(
+      `/my-bookings/${id}/extension-options?${query({ phone })}`,
+      { signal },
+    ),
+  extend: (id: number, phone: string, hours_to_add: number[]) =>
+    request<ExtendResponse>(
+      `/my-bookings/${id}/extend?${query({ phone })}`,
+      post({ hours_to_add }),
+    ),
   login: (username: string, password: string) =>
     request<LoginResult>('/auth/login', post({ username, password })),
   me: (signal?: AbortSignal) => request<Admin>('/auth/me', { signal }, true),

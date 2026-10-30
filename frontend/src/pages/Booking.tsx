@@ -64,8 +64,10 @@ function BookingFlow({ category }: { category: CategoryCode }) {
   })
   const [showSizes, setShowSizes] = useState(false)
   const [gender, setGender] = useState<'male' | 'female'>('male')
-  const isReady = types.data?.every((t) => !t.is_required || !!selections[t.code]) ?? false
-
+  const isReady = types.data?.every((t) => {
+    if (t.code === 'goggles') return true
+    return !t.is_required || !!selections[t.code]
+  }) ?? false
   const availabilityParams = (() => {
     const params: Record<string, string | number | undefined> = { category }
     
@@ -161,10 +163,12 @@ function BookingFlow({ category }: { category: CategoryCode }) {
         if (baseTypes.includes(t.code)) return // базовые уходят в size_value/bucket
 
         const isNumeric = ['skate', 'ski_boot', 'snowboard_boot'].includes(t.code)
+        const isOneSize = size === 'one-size'
+
         selected_items.push({
           item_type_code: t.code,
           size_value: isNumeric ? Number(size) : undefined,
-          size_bucket: !isNumeric ? size : undefined,
+          size_bucket: (!isNumeric && !isOneSize) ? size : undefined,
         })
       })
     }
