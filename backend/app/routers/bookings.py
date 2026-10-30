@@ -9,7 +9,13 @@ from app.services.booking import create_booking
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
-@router.post("", response_model=BookingRead, status_code=201)
+@router.post(
+    "", 
+    response_model=BookingRead, 
+    status_code=201,
+    summary="Создать бронь",
+    description="Создаёт новую бронь. Проверяет доступность инвентаря и защищает от одновременного бронирования (race condition)."
+)
 def book(payload: BookingCreate, db: Session = Depends(get_db)):
     try:
         booking = create_booking(db, payload)

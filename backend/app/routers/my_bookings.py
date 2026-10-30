@@ -20,9 +20,14 @@ from app.services.booking import (
 router = APIRouter(prefix="/my-bookings", tags=["my-bookings"])
 
 
-@router.get("", response_model=list[MyBookingRead])
+@router.get(
+    "", 
+    response_model=list[MyBookingRead],
+    summary="Мои брони",
+    description="Возвращает список всех броней клиента по номеру телефона."
+)
 def list_my_bookings(
-    phone: str = Query(..., description="Номер телефона, указанный при бронировании"),
+    phone: str = Query(..., description="Номер телефона клиента", examples=["+79161234567"]),
     db: Session = Depends(get_db),
 ):
 
@@ -72,10 +77,15 @@ def list_my_bookings(
     return result
 
 
-@router.post("/{booking_id}/cancel", response_model=CancelResponse)
+@router.post(
+    "/{booking_id}/cancel", 
+    response_model=CancelResponse,
+    summary="Отменить бронь",
+    description="Отменяет бронь клиента. Требуется указать номер телефона, чтобы чужую бронь нельзя было отменить."
+)
 def cancel(
     booking_id: int,
-    phone: str = Query(..., description="Номер телефона, указанный при бронировании"),
+    phone: str = Query(..., description="Номер телефона клиента", examples=["+79161234567"]),
     db: Session = Depends(get_db),
 ):
 
@@ -96,20 +106,30 @@ def cancel(
         db.rollback()
         raise HTTPException(500, f"Ошибка отмены: {e}")
 
-@router.get("/{booking_id}/extension-options", response_model=ExtensionOptions)
+
+@router.get(
+    "/{booking_id}/extension-options", 
+    response_model=ExtensionOptions,
+    summary="Варианты продления",
+    description="Возвращает часы, на которые можно продлить бронь (подряд после последнего часа)."
+)
 def extension_options(
     booking_id: int,
-    phone: str = Query(..., description="Номер телефона"),
+    phone: str = Query(..., description="Номер телефона клиента", examples=["+79161234567"]),
     db: Session = Depends(get_db),
 ):
     return get_extension_options(db, booking_id, phone)
 
 
-@router.post("/{booking_id}/extend")
+@router.post(
+    "/{booking_id}/extend",
+    summary="Продлить бронь",
+    description="Продлевает бронь на указанные часы (только подряд после последнего часа)."
+)
 def extend(
     booking_id: int,
     payload: ExtendRequest,
-    phone: str = Query(..., description="Номер телефона"),
+    phone: str = Query(..., description="Номер телефона клиента", examples=["+79161234567"]),
     db: Session = Depends(get_db),
 ):
     try:

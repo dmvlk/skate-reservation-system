@@ -18,17 +18,28 @@ from app.services import admin as admin_service
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-@router.get("/inventory", response_model=list[InventoryItemRead])
+@router.get(
+    "/inventory", 
+    response_model=list[InventoryItemRead],
+    summary="Список инвентаря",
+    description="Возвращает список единиц инвентаря с возможностью фильтрации по типу и статусу."
+)
 def list_inventory(
-    item_type: str | None = Query(None, description="skate, ski, helmet и другие"),
-    status: str | None = Query(None, description="available / rented / broken"),
+    item_type: str | None = Query(None, description="Код типа (например, skate)", examples=["skate"]),
+    status: str | None = Query(None, description="Статус инвентаря", examples=["available"]),
     db: Session = Depends(get_db),
     admin: Admin = Depends(get_current_admin),
 ):
     return admin_service.list_inventory(db, item_type, status)
 
 
-@router.post("/inventory", response_model=InventoryItemRead, status_code=201)
+@router.post(
+    "/inventory", 
+    response_model=InventoryItemRead, 
+    status_code=201,
+    summary="Добавить инвентарь",
+    description="Добавляет новую единицу инвентаря. Если размер буквенный, передается `size_bucket`, если числовой — `size_value`."
+)
 def add_inventory(
     payload: InventoryItemCreate,
     db: Session = Depends(get_db),
@@ -54,7 +65,12 @@ def add_inventory(
         raise HTTPException(400, str(e))
 
 
-@router.delete("/inventory/{item_id}", status_code=204)
+@router.delete(
+    "/inventory/{item_id}", 
+    status_code=204,
+    summary="Удалить инвентарь",
+    description="Удаляет единицу инвентаря. Нельзя удалить, если она участвует в брони."
+)
 def delete_inventory(
     item_id: int,
     db: Session = Depends(get_db),
@@ -69,7 +85,12 @@ def delete_inventory(
         raise HTTPException(400, str(e))
 
 
-@router.patch("/inventory/{item_id}/status", response_model=InventoryItemRead)
+@router.patch(
+    "/inventory/{item_id}/status", 
+    response_model=InventoryItemRead,
+    summary="Сменить статус инвентаря",
+    description="Меняет статус единицы (например, пометить как сломанную)."
+)
 def update_inventory_status(
     item_id: int,
     payload: InventoryItemStatusUpdate,
@@ -94,10 +115,14 @@ def update_inventory_status(
         raise HTTPException(400, str(e))
 
 
-
-@router.get("/bookings", response_model=list[AdminBookingRead])
+@router.get(
+    "/bookings", 
+    response_model=list[AdminBookingRead],
+    summary="Найти брони по телефону",
+    description="Ищет все брони клиента по номеру телефона."
+)
 def find_bookings(
-    phone: str = Query(..., description="Номер телефона клиента"),
+    phone: str = Query(..., description="Номер телефона клиента", examples=["+79161234567"]),
     db: Session = Depends(get_db),
     admin: Admin = Depends(get_current_admin),
 ):
@@ -134,7 +159,12 @@ def find_bookings(
     return result
 
 
-@router.post("/bookings/{booking_id}/issue", response_model=IssueBookingResponse)
+@router.post(
+    "/bookings/{booking_id}/issue", 
+    response_model=IssueBookingResponse,
+    summary="Выдать инвентарь",
+    description="Меняет статус брони на `issued` и помечает инвентарь как выданный."
+)
 def issue_booking(
     booking_id: int,
     db: Session = Depends(get_db),
@@ -160,7 +190,12 @@ def issue_booking(
         raise HTTPException(400, str(e))
 
 
-@router.post("/bookings/{booking_id}/complete", response_model=CompleteBookingResponse)
+@router.post(
+    "/bookings/{booking_id}/complete", 
+    response_model=CompleteBookingResponse,
+    summary="Принять возврат",
+    description="Меняет статус брони на `completed` и возвращает инвентарь в доступные."
+)
 def complete_booking(
     booking_id: int,
     db: Session = Depends(get_db),
@@ -181,8 +216,13 @@ def complete_booking(
         raise HTTPException(400, str(e))
 
 
-@router.get("/bookings/{booking_id}", response_model=AdminBookingRead)
-def get_booking(  # для кьюар кода
+@router.get(
+    "/bookings/{booking_id}", 
+    response_model=AdminBookingRead,
+    summary="Бронь по ID (для QR кода)",
+    description="Возвращает данные брони по ID. Используется для сканирования QR-кода."
+)
+def get_booking(
     booking_id: int,
     db: Session = Depends(get_db),
     admin: Admin = Depends(get_current_admin),

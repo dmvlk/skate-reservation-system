@@ -10,13 +10,23 @@ from app.schemas import CategoryRead, ItemTypeRead, SizeOptionRead
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
-@router.get("", response_model=list[CategoryRead])
+@router.get(
+    "", 
+    response_model=list[CategoryRead],
+    summary="Список категорий",
+    description="Возвращает все доступные категории проката (коньки, лыжи, сноуборд)."
+)
 def list_categories(db: Session = Depends(get_db)):
     categories = db.execute(select(Category).order_by(Category.id)).scalars().all()
     return categories
 
 
-@router.get("/{category_code}/item-types", response_model=list[ItemTypeRead])
+@router.get(
+    "/{category_code}/item-types", 
+    response_model=list[ItemTypeRead],
+    summary="Типы снаряжения для категории",
+    description="Возвращает список типов снаряжения (с размерами) для выбранной категории. Флаг `is_required` показывает, обязательно ли выбирать этот элемент."
+)
 def list_item_types(category_code: str, db: Session = Depends(get_db)):
     category = db.execute(
         select(Category).where(Category.code == category_code)

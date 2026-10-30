@@ -11,7 +11,12 @@ from app.utils.jwt import create_access_token
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login", 
+    response_model=TokenResponse,
+    summary="Вход для администратора",
+    description="Авторизует администратора и возвращает JWT-токен. Токен нужно передавать в заголовке `Authorization: Bearer <token>`."
+)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     admin = authenticate_admin(db, payload.username, payload.password)
     token = create_access_token(admin.username)
@@ -26,6 +31,11 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/me", response_model=AdminRead)
+@router.get(
+    "/me", 
+    response_model=AdminRead,
+    summary="Профиль администратора",
+    description="Возвращает данные текущего администратора (требуется авторизация)."
+)
 def me(admin=Depends(get_current_admin)):
     return admin
